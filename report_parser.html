@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>File Input Parser</title>
+</head>
+
+<body>
+    <h1>Parse Uploaded File</h1>
+
+    <form id="file-form">
+        <input type="file" id="file-input" accept=".html" />
+        <button type="button" onclick="parseFile()">Parse File</button>
+    </form>
+
+    <pre id="result"></pre>
+
+    <script>
+
+
+
+        function extractCardData(doc) {
+            const cardElements = doc.querySelectorAll('.card--vuln');
+            const mainJsonObj = {};
+
+            const jsonData = [];
+
+            cardElements.forEach((cardElement) => {
+                const severityElement = cardElement.querySelector('.severity-icon');
+                const severityClass = severityElement.classList[1];
+                const severity = severityClass.split('--')[1];
+
+                const cweElement = cardElement.querySelector('.card__meta').querySelectorAll(".card__meta__item")[1];
+                const cwe = cweElement.textContent.split("-")[1];
+
+                const titleElement = cardElement.querySelector('.card__title');
+                const vulnerabilityName = titleElement.textContent.trim();
+
+                const descriptionElement = cardElement.querySelector('.card__summary p');
+                const description = descriptionElement.textContent.trim();
+
+                const locationElement = cardElement.querySelector('.file-location strong');
+                const location = locationElement.textContent.trim();
+
+                const fixAnalysisElement = cardElement.querySelector('.card__panel.fix-analysis');
+                const howToPrevent = extractHowToPrevent(fixAnalysisElement);
+
+                const dataflowElement = cardElement.querySelector('.card__panel.dataflow');
+                const dataflowSteps = dataflowElement.querySelectorAll('.dataflow__item');
+                const dataflow = [];
+
+                dataflowSteps.forEach((stepElement) => {
+                    const step = stepElement.querySelector('.dataflow__step').textContent;
+                    const codeElement = stepElement.querySelector('.dataflow__code');
+                    const code = codeElement.textContent.trim();
+                    const sourceElement = stepElement.querySelector('.dataflow__badge');
+                    const source = sourceElement ? sourceElement.title : '';
+
+                    dataflow.push({
+                        step,
+                        code,
+                        source,
+                    });
+                });
+
+
+                const cardData = {
+                    severity,
+                    description,
+                    instances: [{ dataflow }],
+                    "solution": howToPrevent,
+                    "cwe_id": cwe
+                };
+
+                if (mainJsonObj[vulnerabilityName] != null) {
+                    mainJsonObj[vulnerabilityName].instances.push({ location, dataflow });
+                }
+                else {
+                    mainJsonObj[vulnerabilityName] = cardData;
+                }
+                jsonData.push(cardData);
+            });
+
+            return mainJsonObj;
+        }
+
+        function extractHowToPrevent(fixAnalysisElement) {
+            const howToPreventHeading = fixAnalysisElement.querySelector('h3#how-to-prevent');
+
+            if (howToPreventHeading) {
+
+                let nextElement = howToPreventHeading.nextElementSibling;
+
+                const arr = [];
+
+                while (nextElement) {
+                    if (nextElement && nextElement.tagName.toLowerCase() === 'ul') {
+                        let prevents = nextElement.querySelectorAll('li');
+                        prevents.forEach(liText => {
+                            arr.push(liText.textContent);
+                        });
+                    }
+
+                    nextElement = nextElement.nextElementSibling;
+                }
+
+                return arr;
+            }
+
+            else {
+                return [];
+            }
+
+        }
+
+
+
+        function extractSummaryOfAlerts(doc) {
+            const summaryRows = doc.querySelectorAll('.summary tr');
+            const summary = {
+                high: parseInt(summaryRows[1].querySelectorAll('div')[1].textContent),
+                medium: parseInt(summaryRows[2].querySelectorAll('div')[1].textContent),
+                low: parseInt(summaryRows[3].querySelectorAll('div')[1].textContent),
+                informational: parseInt(summaryRows[4].querySelectorAll('div')[1].textContent),
+            };
+            return summary;
+        }
+
+
+        function extractAlertsTable(doc) {
+            const alertsTableElement = doc.querySelector('.alerts');
+            const rows = alertsTableElement.querySelectorAll('tr');
+            const alertsTable = [];
+            for (let i = 1; i < rows.length; i++) {
+                const columns = rows[i].querySelectorAll('td');
+                const alert = {
+                    name: columns[0].querySelector('a').textContent,
+                    riskLevel: columns[1].textContent,
+                    numberOfInstances: parseInt(columns[2].textContent),
+                };
+                alertsTable.push(alert);
+            }
+            return alertsTable;
+        }
+
+        function extractDetailsTables(doc) {
+
+
+
+            const tableElements = doc.querySelectorAll('table.results');
+            const alertDetails = {};
+
+            tableElements.forEach((tableElement) => {
+
+                const rows = tableElement.querySelectorAll('tr');
+                const alertDetail = {};
+                const instances = [];
+
+                const vulnebilityName = rows[0].querySelectorAll('th')[1].textContent;
+                const severity = rows[0].querySelectorAll('th')[0].textContent.trim().toLowerCase();
+
+
+                alertDetail.severity = severity;
+
+
+
+                for (let i = 1; i < rows.length; i++) {
+                    const columns = rows[i].querySelectorAll('td, th');
+
+                    if (columns.length >= 2) {
+                        const key = columns[0].textContent.trim().toLowerCase();
+                        const value = columns[1].textContent.trim();
+
+
+                        if (key === "instances") {
+                            alertDetail.instances = instances;
+                        } else if (key === "url") {
+                            const instance = {
+                                url: value,
+                                method: "",
+                                parameter: "",
+                                attack: "",
+                                evidence: "",
+                            };
+
+
+
+
+                            instances.push(instance);
+                        } else if (key === "method") {
+                            const lastIndex = instances.length - 1;
+                            if (lastIndex >= 0) {
+                                instances[lastIndex].method = value;
+                            }
+                        } else if (key === "parameter") {
+                            const lastIndex = instances.length - 1;
+                            if (lastIndex >= 0) {
+                                instances[lastIndex].parameter = value;
+                            }
+                        } else if (key === "attack") {
+                            const lastIndex = instances.length - 1;
+                            if (lastIndex >= 0) {
+                                instances[lastIndex].attack = value;
+                            }
+                        } else if (key === "evidence") {
+                            const lastIndex = instances.length - 1;
+                            if (lastIndex >= 0) {
+                                instances[lastIndex].evidence = value;
+                            }
+                        }
+
+                        else if (key === "plugin id" || key === "wasc id") {
+                            continue;
+                        }
+                        else if (key === 'cwe id') {
+                            alertDetail['cwe_id'] = value;
+                        }
+                        else if (key === 'solution') {
+                            if (value)
+                                alertDetail[key] = [value];
+
+                            else
+                                alertDetail[key] = [];
+                        }
+
+                        else {
+                            alertDetail[key] = value;
+                        }
+                    }
+                }
+
+                if (Object.keys(alertDetail).length > 0) {
+                    alertDetails[vulnebilityName] = alertDetail;
+                }
+            });
+
+            return alertDetails;
+
+
+        }
+
+        function vulnerabilityDetailsBuilder(doc) {
+            const pyntIssueContainer = doc.querySelectorAll('.pynt-issue-container');
+            var mainJsonObj = {};
+            const jsonData = [];
+            pyntIssueContainer.forEach((container) => {
+                var testName = container.querySelector('.pynt-test-case-text').textContent;
+                const delimiter = ":"
+                const delimiterIndex = testName.indexOf(delimiter);
+                var vulnerabilityName = "Vulnerability"
+                if (delimiterIndex !== -1) {
+                    vulnerabilityName = testName.substring(delimiterIndex + 1).trim();
+
+                }
+                var elementWithClass = container.querySelector('.pynt-owasp-top-10-container');
+                var owaspLink = elementWithClass?.querySelector('a').getAttribute('href');
+                var vulnerabilityNameCode = getVulnerabilityNameCode(owaspLink);
+                var vulnerabilityDescription = getvulnerabilityDescription(vulnerabilityNameCode);
+                var dataflow = [];
+                var discovery = container?.querySelector(".pynt-issue-what-we-found-text").textContent.trim().substring(14).trim();
+                var fix = container?.getElementsByClassName('pynt-white-bordered-container pynt-finding-fix-it-text') ? [0].textContent?.trim().substring(7).trim() : "could not find fix";
+
+
+                // if(container.querySelector('.pynt-status-title').textContent.trim()==="Passed"){
+                // for passed ones 
+                // }
+                // if(container.querySelector('.pynt-finding-status-title')!==null){
+                // for error and warning
+                // }
+                dataflow.push({
+                    discovery,
+                    fix,
+                    owaspLink,
+                });
+
+                var vulnebilityDetails = {
+                    severity: "Default",
+                    description: vulnerabilityDescription,
+                    instances: dataflow,
+                    solution: fix,
+                    reference: owaspLink,
+                    cwe_id: owaspLink
+                };
+
+                mainJsonObj[vulnerabilityName] = vulnebilityDetails;
+            })
+            return mainJsonObj;
+        }
+
+        function getVulnerabilityNameCode(owaspLink) {
+
+            if (owaspLink?.includes('github.com')) {
+                var startIndex = owaspLink.indexOf('0x');
+                var endIndex = owaspLink.indexOf('.md');
+                return owaspLink.substring(startIndex, endIndex);
+
+            }
+            else {
+                var startIndex = owaspLink?.indexOf('0x');
+                var endIndex = owaspLink?.length - 1;
+                return owaspLink?.substring(startIndex, endIndex);
+
+            }
+        }
+
+        function getvulnerabilityDescription(vulnerabilityName) {
+
+
+
+            switch (vulnerabilityName) {
+                case '0xa1-broken-object-level-authorization':
+                    return "Broken object level authorization (BOLA) is a type of API vulnerability that occurs when an application doesn't confirm that a user has the required privileges to access another user's resources. This can allow attackers to access data objects that should be restricted";
+                case '0xa2-broken-user-authentication':
+                    return "Broken authentication is a security risk that allows attackers to impersonate users on applications. Attackers can compromise passwords, session tokens, user account information, and other details to assume user identities.";
+                case '0xa3-excessive-data-exposure':
+                    return "Excessive data exposure is a security vulnerability that occurs when an application returns more information than necessary for a user to perform a specific action. This can happen when an API returns all data to the client, rather than just the required data";
+                case '0xa4-lack-of-resources-and-rate-limiting':
+                    return "Lack of resources and rate limiting is an API security vulnerability that occurs when an API does not restrict the number or frequency of requests from a particular API client.";
+                case '0xa5-broken-function-level-authorization':
+                    return "Broken Function Level Authorization (BFLA) is an application programming interface (API) vulnerability that allows unauthorized access to functions or features that should be restricted based on the user's role or permissions. BFLA is a higher-level version of broken object level authorization (BOLA). When exploiting a BFLA vulnerability, an attacker focuses on general API functions rather than individual API objects";
+                case '0xa6-mass-assignment':
+                    return "Mass assignment vulnerabilites occur when a user is able to initialize or overwrite server-side variables for which are not intended by the application. By manually crafting a request to include additional parameters in a request, a malicious user may adversely affect application functionality.";
+                case '0xa7-security-misconfiguration':
+                    return "A security misconfiguration vulnerability occurs when system or application configuration settings are missing or are erroneously implemented. This can allow unauthorized access.";
+                case '0xa8-injection':
+                    return "Injection flaws, such as SQL, NoSQL, Command Injection, etc., occur when untrusted data is sent to an interpreter as part of a command or query. The attacker’s malicious data can trick the interpreter into executing unintended commands or accessing data without proper authorization";
+                case '0xa9-improper-assets-management':
+                    return "Improper assets management is a security vulnerability that occurs when developers don't correctly document and manage their APIs.It Can lead to Exploits due to stagnation and lack of oversight and ownership and Unauthorized data access ";
+                case '0xaa-insufficient-logging-monitoring':
+                    return "Insufficient logging and monitoring is a cybersecurity vulnerability that occurs when an application or system doesn't generate enough log data or doesn't monitor its logs effectively. This can lead to potential security threats";
+                case '0xa3-broken-object-property-level-authorization':
+                    return "The Broken Object Property Level Authorization category combines attacks that happen by gaining unauthorized access to sensitive information by way of Excessive Data Exposure or Mass Assignment";
+                case '0xa4-unrestricted-resource-consumption':
+                    return "Unrestricted resource consumption is a type of denial-of-service (DoS) attack that aims to exhaust the resources of a target system or application. It's also known as resource exhaustion";
+                case '0xa6-unrestricted-access-to-sensitive-business-flows':
+                    return "Unrestricted Access to Sensitive Business Flows involves exploitation of the business model behind the application, such as buying all the product, reserving all the seats, or artificially initiating a price reduction. In these vulnerabilities, the API facilitates an unexpected and unwanted business flow";
+                case '0xa7-server-side-request-forgery':
+                    return "SSRF occurs when an attacker can manipulate the input parameters of a web application that requests resources from other servers, such as databases, web services, or other APIs.";
+                case '0xa8-security-misconfiguration':
+                    return "A security misconfiguration vulnerability occurs when system or application configuration settings are missing or are erroneously implemented. This can allow unauthorized access.";
+                case '0xa9-improper-inventory-management':
+                    return "Improper inventory management is a security threat that can occur when an organization fails to retire old versions of an API or remove deprecated endpoints.";
+                case '0xaa-unsafe-consumption-of-apis.':
+                    return "Unsafe consumption of APIs is a vulnerability that occurs when data retrieved from an API is not sanitized and validated to the same standard as user-supplied data. This can lead to security breaches, exposing sensitive data, user credentials, or proprietary information";
+
+            }
+        }
+
+
+
+
+        //neeraj code
+        function extractVulDetails(doc) {
+
+            //vul names
+            const vulCollection = doc.querySelectorAll(".BODH0");
+
+            const vulnerabilityDetails = {};
+
+            //count of heading and sub heading
+            const headinscount = doc.querySelectorAll("p");
+
+            let c1 = 0;
+
+            let c2 = 0;
+
+            const myMap = new Map();
+
+            let oldhead = "";
+
+            headinscount.forEach((heading, index, headinscount) => {
+
+
+
+                if (heading.className == "TOCH0") {
+                    const points = heading.textContent;
+                    myMap.set(oldhead, c2);
+                    c2 = 0;
+                    c1++;
+                    oldhead = heading.textContent;
+                }
+
+                if (heading.className == "TOCH1") {
+                    c2++;
+                }
+
+
+                if (index === headinscount.length - 1) {
+                    myMap.set(oldhead, c2);
+                }
+
+            });
+
+
+
+            //remediation step
+            const remediation = {};
+            const headins = doc.querySelectorAll("h2");
+            let counter = 0;
+
+            headins.forEach((heading) => {
+
+                if (heading.textContent == "Issue remediation") {
+                    remediation[counter] = heading.nextElementSibling.textContent;
+
+                    counter++;
+
+                }
+
+            });
+
+            console.log("------------------")
+            console.log(remediation);
+
+
+
+            //inner data table
+
+
+
+            const summaryTabel = doc.querySelectorAll(".summary_table >tbody");
+
+
+
+            const tableData = [];
+
+
+
+            summaryTabel.forEach((iterator) => {
+
+                const summaryTabelData = {
+
+                    Severity: iterator.querySelector("tr:nth-child(1)>td:nth-child(3)").textContent,
+
+
+
+                    Confidence: iterator.querySelector("tr:nth-child(2)>td:nth-child(2)").textContent,
+
+
+
+                    Host: iterator.querySelector("tr:nth-child(3)>td:nth-child(2)").textContent,
+
+
+
+                    Path: iterator.querySelector("tr:nth-child(4)>td:nth-child(2)").textContent,
+
+                };
+
+                tableData.push(summaryTabelData);
+
+
+
+            });
+
+            console.log(tableData);
+
+
+            let instancesCounter = 0;
+            myMap.forEach((value, key) => {
+
+                const vulD = {};
+                const instances = []
+
+                for (let i = 0; i < value; i++) {
+                    instances.push(tableData[instancesCounter++]);
+                }
+
+                vulD.instances = instances;
+                vulnerabilityDetails[key] = vulD;
+
+
+            });
+
+
+
+
+            return vulnerabilityDetails;
+
+        }
+
+
+
+
+
+        //parser starts 
+        function parseFile() {
+            const fileInput = document.getElementById('file-input');
+            const resultOutput = document.getElementById('result');
+
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+
+                reader.readAsText(file);
+
+                reader.onload = function (e) {
+                    const fileContent = e.target.result;
+
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(fileContent, 'text/html');
+
+
+                    const titleElement = doc.querySelector('title');
+                    console.log(titleElement.textContent.toLowerCase())
+                    let title = null;
+                    if (titleElement)
+                        title = titleElement.textContent.toLowerCase();
+
+
+                    console.log(title);
+
+
+                    //parsing for zap report 
+                    if (title.includes("zap")) {
+                        const summaryOfAlerts = extractSummaryOfAlerts(doc);
+                        const alertsTable = extractAlertsTable(doc);
+                        const detailsTables = extractDetailsTables(doc);
+
+                        const jsonData = {
+
+                            "alertSummary": summaryOfAlerts,
+                            "vulnerabilityDetails": detailsTables
+                        };
+
+
+                        const jsonString = JSON.stringify({ zap: jsonData });
+                        console.log(jsonString);
+
+                    }
+
+                    //parsing for snyk report
+                    else if (title.includes("snyk")) {
+
+
+                        const highCount = parseInt(doc.querySelector('.severity-icon--high + span strong').textContent);
+                        const mediumCount = parseInt(doc.querySelector('.severity-icon--medium + span strong').textContent);
+                        const lowCount = parseInt(doc.querySelector('.severity-icon--low + span strong').textContent);
+
+
+                        const counts = {
+                            high: highCount,
+                            medium: mediumCount,
+                            low: lowCount
+                        };
+
+                        const jsonCardData = extractCardData(doc);
+                        const finalJsonObj = {
+                            "alertSummary": counts,
+                            "vulnerabilityDetails": jsonCardData
+                        }
+                        console.log(JSON.stringify({ snyk: finalJsonObj }));
+
+                    }
+
+
+                    //burp
+                    else if (title.includes("burp")) {
+                        const highCount = parseInt(
+                            doc.getElementsByClassName("colour_block row_total")[0].textContent
+                        );
+
+
+
+                        const mediumCount = parseInt(
+                            doc.getElementsByClassName("colour_block row_total")[1].textContent
+                        );
+
+
+
+                        const lowCount = parseInt(
+                            doc.getElementsByClassName("colour_block row_total")[2].textContent
+                        );
+
+                        const infoCount = parseInt(
+                            doc.getElementsByClassName("colour_block row_total")[3].textContent
+                        );
+
+
+
+                        const counts = {
+
+                            high: highCount,
+                            medium: mediumCount,
+                            low: lowCount,
+                            info: infoCount,
+                        };
+
+                        console.log(counts);
+
+                        const vulnerabilityDetails = extractVulDetails(doc);
+
+                        console.log("hi");
+
+                        console.log(JSON.stringify({
+                            
+                            "alertSummary":counts,
+                            vulnerabilityDetails }));
+
+                    }
+
+                    //parsing for Pynt tool 
+                    else {
+
+                        const pyntReportCheck = doc.querySelector(".pynt-layout-root")
+                        if (pyntReportCheck !== null) {
+
+                            const highCount = parseInt(doc.getElementsByClassName('pynt-subtitle')[0].textContent);
+                            const lowCount = parseInt(doc.getElementsByClassName('pynt-subtitle')[1].textContent);
+
+                            const counts = {
+                                high: highCount,
+                                medium: 0,
+                                low: lowCount
+                            };
+
+                            const vulnerabilityDetailsJson = vulnerabilityDetailsBuilder(doc);
+                            const finalJsonObj = {
+                                "alertSummary": counts,
+                                "vulnerabilityDetails": vulnerabilityDetailsJson
+                            };
+                            console.log(JSON.stringify({ pynt: finalJsonObj }))
+
+                        }
+                    }
+                };
+
+
+            } else {
+                resultOutput.textContent = 'Select a valid file.';
+            }
+        }
+
+
+
+
+    </script>
+</body>
+
+</html>
