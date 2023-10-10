@@ -354,14 +354,12 @@
 
             //vul names
             const vulCollection = doc.querySelectorAll(".BODH0");
-
             const vulnerabilityDetails = {};
 
             //count of heading and sub heading
             const headinscount = doc.querySelectorAll("p");
 
             let c1 = 0;
-
             let c2 = 0;
 
             const myMap = new Map();
@@ -370,20 +368,17 @@
 
             headinscount.forEach((heading, index, headinscount) => {
 
-
-
                 if (heading.className == "TOCH0") {
                     const points = heading.textContent;
                     myMap.set(oldhead, c2);
                     c2 = 0;
                     c1++;
-                    oldhead = heading.textContent;
+                    oldhead = heading.textContent.substring(3);
                 }
 
                 if (heading.className == "TOCH1") {
                     c2++;
                 }
-
 
                 if (index === headinscount.length - 1) {
                     myMap.set(oldhead, c2);
@@ -402,58 +397,30 @@
 
                 if (heading.textContent == "Issue remediation") {
                     remediation[counter] = heading.nextElementSibling.textContent;
-
                     counter++;
-
                 }
 
             });
 
-            console.log("------------------")
             console.log(remediation);
 
 
-
             //inner data table
-
-
-
             const summaryTabel = doc.querySelectorAll(".summary_table >tbody");
 
-
-
             const tableData = [];
-
-
 
             summaryTabel.forEach((iterator) => {
 
                 const summaryTabelData = {
-
-                    Severity: iterator.querySelector("tr:nth-child(1)>td:nth-child(3)").textContent,
-
-
-
-                    Confidence: iterator.querySelector("tr:nth-child(2)>td:nth-child(2)").textContent,
-
-
-
-                    Host: iterator.querySelector("tr:nth-child(3)>td:nth-child(2)").textContent,
-
-
-
-                    Path: iterator.querySelector("tr:nth-child(4)>td:nth-child(2)").textContent,
-
+                    severity: iterator.querySelector("tr:nth-child(1)>td:nth-child(3)").textContent.toLowerCase(),
+                    confidence: iterator.querySelector("tr:nth-child(2)>td:nth-child(2)").textContent,
+                    host: iterator.querySelector("tr:nth-child(3)>td:nth-child(2)").textContent,
+                    path: iterator.querySelector("tr:nth-child(4)>td:nth-child(2)").textContent,
                 };
 
                 tableData.push(summaryTabelData);
-
-
-
             });
-
-            console.log(tableData);
-
 
             let instancesCounter = 0;
             myMap.forEach((value, key) => {
@@ -466,16 +433,25 @@
                 }
 
                 vulD.instances = instances;
-                vulnerabilityDetails[key] = vulD;
 
+                if (key)
+                    vulnerabilityDetails[key] = vulD;
 
             });
 
-
-
-
             return vulnerabilityDetails;
 
+        }
+
+        function findIssueBackground(startElement) {
+            let currentElement = startElement.nextElementSibling;
+            while (currentElement && currentElement.className != 'BODH0') {
+                if (currentElement.tagName === "H2" && currentElement.textContent.trim() === "Issue background") {
+                    return currentElement.nextElementSibling;
+                }
+                currentElement = currentElement.nextElementSibling;
+            }
+            return null;
         }
 
 
@@ -592,9 +568,10 @@
                         console.log("hi");
 
                         console.log(JSON.stringify({
-                            
-                            "alertSummary":counts,
-                            vulnerabilityDetails }));
+
+                            "alertSummary": counts,
+                            vulnerabilityDetails
+                        }));
 
                     }
 
