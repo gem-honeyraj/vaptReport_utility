@@ -356,6 +356,19 @@
             const vulCollection = doc.querySelectorAll(".BODH0");
             const vulnerabilityDetails = {};
 
+            const desMap =  new Map();
+            const remdMap =  new Map();
+
+            vulCollection.forEach((vul)=> {
+
+                desMap.set(vul.textContent , findIssueBackground(vul));
+                remdMap.set(vul.textContent , findRemedation(vul));
+
+            });
+
+            console.log("0----0");
+            console.log(desMap);
+
             //count of heading and sub heading
             const headinscount = doc.querySelectorAll("p");
 
@@ -373,7 +386,7 @@
                     myMap.set(oldhead, c2);
                     c2 = 0;
                     c1++;
-                    oldhead = heading.textContent.substring(3);
+                    oldhead = heading.textContent;
                 }
 
                 if (heading.className == "TOCH1") {
@@ -435,7 +448,15 @@
                 vulD.instances = instances;
 
                 if (key)
-                    vulnerabilityDetails[key] = vulD;
+                {
+                
+
+                    description = desMap.get(key);
+                    remed = remdMap.get(key);
+                    vulnerabilityDetails[key.substring(3)] = vulD;
+                    vulnerabilityDetails[key.substring(3)].description = description;
+                    vulnerabilityDetails[key.substring(3)].remediation = remed;
+                }
 
             });
 
@@ -443,11 +464,32 @@
 
         }
 
+        
+
         function findIssueBackground(startElement) {
             let currentElement = startElement.nextElementSibling;
             while (currentElement && currentElement.className != 'BODH0') {
-                if (currentElement.tagName === "H2" && currentElement.textContent.trim() === "Issue background") {
-                    return currentElement.nextElementSibling;
+                if (currentElement.tagName === "H2" && currentElement.textContent.trim() === "Issue background" || currentElement.textContent.trim() === "Issue description" ) {
+                    let description ="";
+                    currentElement.nextElementSibling.querySelectorAll("p").forEach((ele) => { 
+                        description += ele.textContent;
+                         });
+                    return description;
+                }
+                currentElement = currentElement.nextElementSibling;
+            }
+            return null;
+        }
+
+        function findRemedation(startElement) {
+            let currentElement = startElement.nextElementSibling;
+            while (currentElement && currentElement.className != 'BODH0') {
+                if (currentElement.tagName === "H2" && currentElement.textContent.trim() === "Issue remediation" ) {
+                    let remd ="";
+                    currentElement.nextElementSibling.querySelectorAll("p").forEach((ele) => { 
+                        remd += ele.textContent;
+                         });
+                    return remd;
                 }
                 currentElement = currentElement.nextElementSibling;
             }
@@ -534,15 +576,9 @@
                         const highCount = parseInt(
                             doc.getElementsByClassName("colour_block row_total")[0].textContent
                         );
-
-
-
                         const mediumCount = parseInt(
                             doc.getElementsByClassName("colour_block row_total")[1].textContent
                         );
-
-
-
                         const lowCount = parseInt(
                             doc.getElementsByClassName("colour_block row_total")[2].textContent
                         );
@@ -565,7 +601,7 @@
 
                         const vulnerabilityDetails = extractVulDetails(doc);
 
-                        console.log("hi");
+            
 
                         console.log(JSON.stringify({
 
